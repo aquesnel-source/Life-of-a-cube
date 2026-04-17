@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Runner Game (Pause + Adjusted Physics)</title>
+
+<style>
+body {
+    margin: 0;
+    background: #111;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    margin: auto;
+    background: #141414;
+}
+</style>
+</head>
+
+<body>
+
+<!-- BUTTONS -->
+<button id="fsBtn" style="
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    padding: 8px 12px;
+    background: #333;
+    color: white;
+    border: none;
+    cursor: pointer;
+">Fullscreen</button>
+
+<button id="pauseBtn" style="
+    position: fixed;
+    top: 10px;
+    left: 110px;
+    z-index: 1000;
+    padding: 8px 12px;
+    background: #333;
+    color: white;
+    border: none;
+    cursor: pointer;
+">Pause</button>
+
+<canvas id="game" width="800" height="400"></canvas>
+
+<script>
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// FULLSCREEN
+document.getElementById("fsBtn").onclick = () => {
+    if (!document.fullscreenElement) canvas.requestFullscreen();
+    else document.exitFullscreen();
+};
+
+// PAUSE
+let paused = false;
+document.getElementById("pauseBtn").onclick = () => {
+    paused = !paused;
+    document.getElementById("pauseBtn").innerText = paused ? "Resume" : "Pause";
+};
+
+// ================= PHYSICS (ADJUSTED FOR LONG JUMPS) =================
+const GRAVITY = 0.32;   // lower gravity = longer air time
+const JUMP = -11;       // stronger jump = more distance
+const GROUND_Y = 340;
+const SPEED = 2.7;
+
+// ================= GAME STATE =================
+let score = 0;
+let highScore = 0;
+
+let lastSpawnX = 300;
+let nextSpawnTime = 0;
+let passedClusters = new Set();
+
+// ================= PLAYER =================
+const player = {
+    x: 100,
+    y: GROUND_Y - 30,
+    w: 30,
+    h: 30,
+    velY: 0,
+    onGround: false,
+    alive: true
+};
+
+// ================= SPIKES =================
+let spikes = [];
+
+// ================= HELPERS =================
+function rand(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function scheduleNextSpawn() {
+    nextSpawnTime = Date.now() + rand(900, 1800);
+}
+
+function spawnCluster() {
+    lastSpawnX += rand(160, 260);
+
+    let clusterId = Math.floor(Math.random() * 100000);
+    let count = rand(2, 3); // allows triple spikes
+
+    for (let i = 0; i < count; i++) {
+        spikes.push({
+            x: lastSpawnX + i * 40,
+            y: GROUND_Y - 40,
+            size: 40,
+            id: clusterId
+        });
+    }
+
+    lastSpawnX += count * 40;
+}
+
+// ================= RESET =================
+function resetWorld() {
+    spikes = [];
+    passedClusters.clear();
+    lastSpawnX = 300;
+    score = 0;
+    scheduleNextSpawn();
+}
+
+// ================= INPUT =================
+document.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+        if (player.onGround && player.alive && !paused) {
+            player.velY = JUMP;
+        }
+    }
+});
+
+// ================= COLLISION =================
+function collide(a, b) {
+    return a.x < b.x + b.size &&
+           a.x + a.w > b.x &&
+           a.y < b.y + b.size &&
+           a.y + a.h > b.y;
+}
+
+// ================= UPDATE =================
+function update() {
+
+    if (paused) return;
+
+    if (Date.now() >= nextSpawnTime) {
+        spawnCluster();
+        scheduleNextSpawn();
+    }
+
+    for (let s of spikes) {
+        s.x -= SPEED;
+    }
+
+    spikes = spikes.filter(s => s.x + s.size > 0);
+
+    // PLAYER PHYSICS
+    if (player.alive) {
+
+        player.velY += GRAVITY;
+        player.y += player.velY;
+
+        if (player.y + player.h >= GROUND_Y) {
+            player.y = GROUND_Y - player.h;
+            player.velY = 0;
+            player.onGround = true;
+        } else {
+            player.onGround = false;
+        }
+
+        // collision
+        for (let s of spikes) {
+            if (collide(player, s)) {
+                player.alive = false;
+            }
+        }
+    }
+
+    // SCORE
+    for (let s of spikes) {
+        if (!passedClusters.has(s.id)) {
+            if (s.x + s.size < player.x) {
+                passedClusters.add(s.id);
+                score++;
+            }
+        }
+    }
+
+    // RESET
+    if (!player.alive) {
+        if (score > highScore) highScore = score;
+        resetWorld();
+
+        player.x = 100;
+        player.y = GROUND_Y - 30;
+        player.velY = 0;
+        player.alive = true;
+    }
+}
+
+// ================= DRAW =================
+function drawSpike(s) {
+    ctx.fillStyle = "#ff4444";
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y + s.size);
+    ctx.lineTo(s.x + s.size / 2, s.y);
+    ctx.lineTo(s.x + s.size, s.y + s.size);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function draw() {
+    ctx.fillStyle = "#141414";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#555";
+    ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height);
+
+    for (let s of spikes) drawSpike(s);
+
+    ctx.fillStyle = player.alive ? "#66ccff" : "#ff6666";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+
+    ctx.fillStyle = "white";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 10, 25);
+    ctx.fillText("High: " + highScore, 10, 50);
+
+    if (paused) {
+        ctx.font = "40px Arial";
+        ctx.fillText("PAUSED", 320, 200);
+    }
+}
+
+// ================= LOOP =================
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+// START
+scheduleNextSpawn();
+loop();
+
+</script>
+
+</body>
+</html>
