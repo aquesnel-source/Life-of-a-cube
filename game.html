@@ -2,13 +2,16 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Pause + Adjusted Physics)</title>
+<title>Runner Game (Mobile Friendly)</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <style>
 body {
     margin: 0;
     background: #111;
     overflow: hidden;
+    touch-action: none; /* ⭐ IMPORTANT for mobile */
 }
 
 canvas {
@@ -21,7 +24,6 @@ canvas {
 
 <body>
 
-<!-- BUTTONS -->
 <button id="fsBtn" style="
     position: fixed;
     top: 10px;
@@ -31,8 +33,9 @@ canvas {
     background: #333;
     color: white;
     border: none;
-    cursor: pointer;
-">Fullscreen</button>
+">
+Fullscreen
+</button>
 
 <button id="pauseBtn" style="
     position: fixed;
@@ -43,8 +46,9 @@ canvas {
     background: #333;
     color: white;
     border: none;
-    cursor: pointer;
-">Pause</button>
+">
+Pause
+</button>
 
 <canvas id="game" width="800" height="400"></canvas>
 
@@ -53,24 +57,24 @@ canvas {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// FULLSCREEN
+// ================= FULLSCREEN =================
 document.getElementById("fsBtn").onclick = () => {
     if (!document.fullscreenElement) canvas.requestFullscreen();
     else document.exitFullscreen();
 };
 
-// PAUSE
+// ================= PAUSE =================
 let paused = false;
 document.getElementById("pauseBtn").onclick = () => {
     paused = !paused;
     document.getElementById("pauseBtn").innerText = paused ? "Resume" : "Pause";
 };
 
-// ================= PHYSICS (ADJUSTED FOR LONG JUMPS) =================
-const GRAVITY = 0.32;   // lower gravity = longer air time
-const JUMP = -11;       // stronger jump = more distance
-const GROUND_Y = 340;
+// ================= PHYSICS (MOBILE TUNED) =================
+const GRAVITY = 0.30;   // slightly smoother fall
+const JUMP = -11;
 const SPEED = 2.7;
+const GROUND_Y = 340;
 
 // ================= GAME STATE =================
 let score = 0;
@@ -104,10 +108,10 @@ function scheduleNextSpawn() {
 }
 
 function spawnCluster() {
-    lastSpawnX += rand(160, 260);
+    lastSpawnX += rand(170, 260);
 
     let clusterId = Math.floor(Math.random() * 100000);
-    let count = rand(2, 3); // allows triple spikes
+    let count = rand(2, 3);
 
     for (let i = 0; i < count; i++) {
         spikes.push({
@@ -131,13 +135,27 @@ function resetWorld() {
 }
 
 // ================= INPUT =================
-document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") {
-        if (player.onGround && player.alive && !paused) {
-            player.velY = JUMP;
-        }
+
+// ⭐ MOBILE TAP SUPPORT
+function jump() {
+    if (player.onGround && player.alive && !paused) {
+        player.velY = JUMP;
     }
+}
+
+// keyboard
+document.addEventListener("keydown", (e) => {
+    if (e.code === "Space") jump();
 });
+
+// ⭐ mobile touch (FIXED)
+document.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    jump();
+}, { passive: false });
+
+// mouse fallback
+document.addEventListener("mousedown", jump);
 
 // ================= COLLISION =================
 function collide(a, b) {
@@ -163,7 +181,6 @@ function update() {
 
     spikes = spikes.filter(s => s.x + s.size > 0);
 
-    // PLAYER PHYSICS
     if (player.alive) {
 
         player.velY += GRAVITY;
@@ -177,7 +194,6 @@ function update() {
             player.onGround = false;
         }
 
-        // collision
         for (let s of spikes) {
             if (collide(player, s)) {
                 player.alive = false;
@@ -185,7 +201,6 @@ function update() {
         }
     }
 
-    // SCORE
     for (let s of spikes) {
         if (!passedClusters.has(s.id)) {
             if (s.x + s.size < player.x) {
@@ -195,7 +210,6 @@ function update() {
         }
     }
 
-    // RESET
     if (!player.alive) {
         if (score > highScore) highScore = score;
         resetWorld();
