@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Fully Fixed Input)</title>
+<title>Runner Game (Final Fixed Input)</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
@@ -14,13 +14,12 @@ html, body {
     background: #111;
 }
 
-/* CRITICAL MOBILE FIX */
+/* CRITICAL FOR ANDROID TOUCH */
 canvas {
     display: block;
     width: 100vw;
     height: 100vh;
-    touch-action: none; /* stops Android from stealing taps */
-    user-select: none;
+    touch-action: none;
 }
 </style>
 </head>
@@ -75,9 +74,10 @@ function resetPlayer() {
     player.y = groundY() - player.h;
     player.vy = 0;
     player.alive = true;
+    player.onGround = true;
 }
 
-// ================= HELPERS =================
+// ================= WORLD =================
 function rand(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -113,7 +113,7 @@ function resetWorld() {
     resetPlayer();
 }
 
-// ================= 🔥 INPUT (FIXED FOR ANDROID + CHROMEBOOK + PC) =================
+// ================= 🔥 FINAL INPUT SYSTEM (NO FAIL POINTS) =================
 function jump(e) {
     if (e) e.preventDefault();
 
@@ -123,13 +123,17 @@ function jump(e) {
     }
 }
 
-// 📱 MOBILE + ANDROID (THIS IS THE KEY FIX)
-canvas.addEventListener("pointerdown", jump, { passive: false });
+/*
+✔ window = keyboard safety (Chromebook + PC)
+✔ canvas = touch safety (Android)
+✔ capture + passive:false = prevents Android ignoring input
+*/
 
-// fallback for older Android browsers
-canvas.addEventListener("touchstart", jump, { passive: false });
+// TOUCH / MOBILE / TABLET
+canvas.addEventListener("pointerdown", jump, { passive: false, capture: true });
+canvas.addEventListener("touchstart", jump, { passive: false, capture: true });
 
-// 💻 KEYBOARD (PC + CHROMEBOOK)
+// KEYBOARD (PC + CHROMEBOOK)
 window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "ArrowUp") {
         e.preventDefault();
@@ -139,7 +143,7 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "KeyR") {
         resetWorld();
     }
-});
+}, { capture: true });
 
 // ================= COLLISION =================
 function hit(a, b) {
