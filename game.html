@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Guaranteed Input Fix)</title>
+<title>Runner Game (Fully Fixed Input)</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
@@ -12,21 +12,15 @@ html, body {
     height: 100%;
     overflow: hidden;
     background: #111;
-
-    /* IMPORTANT FOR MOBILE */
-    touch-action: none;
-    overscroll-behavior: none;
-    user-select: none;
-    -webkit-user-select: none;
 }
 
+/* CRITICAL MOBILE FIX */
 canvas {
     display: block;
     width: 100vw;
     height: 100vh;
-
-    /* ensures touch events hit canvas cleanly */
-    touch-action: none;
+    touch-action: none; /* stops Android from stealing taps */
+    user-select: none;
 }
 </style>
 </head>
@@ -48,15 +42,16 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// ================= GAME =================
+// ================= GAME SETTINGS =================
 const GRAVITY = 0.30;
 const JUMP = -11;
 const SPEED = 2.7;
 
-function GROUND_Y() {
+function groundY() {
     return canvas.height * 0.85;
 }
 
+// ================= STATE =================
 let spikes = [];
 let passed = new Set();
 let lastX = 300;
@@ -71,14 +66,14 @@ const player = {
     y: 0,
     w: 30,
     h: 30,
-    velY: 0,
+    vy: 0,
     onGround: false,
     alive: true
 };
 
 function resetPlayer() {
-    player.y = GROUND_Y() - player.h;
-    player.velY = 0;
+    player.y = groundY() - player.h;
+    player.vy = 0;
     player.alive = true;
 }
 
@@ -100,7 +95,7 @@ function spawnCluster() {
     for (let i = 0; i < count; i++) {
         spikes.push({
             x: lastX + i * 40,
-            y: GROUND_Y() - 40,
+            y: groundY() - 40,
             size: 40,
             id: id
         });
@@ -118,19 +113,23 @@ function resetWorld() {
     resetPlayer();
 }
 
-// ================= 🔥 GUARANTEED INPUT SYSTEM =================
+// ================= 🔥 INPUT (FIXED FOR ANDROID + CHROMEBOOK + PC) =================
 function jump(e) {
     if (e) e.preventDefault();
 
     if (player.onGround && player.alive) {
-        player.velY = JUMP;
+        player.vy = JUMP;
+        player.onGround = false;
     }
 }
 
-/*
-================= KEYBOARD (PC + CHROMEBOOK) =================
-IMPORTANT: window-level is REQUIRED for reliability
-*/
+// 📱 MOBILE + ANDROID (THIS IS THE KEY FIX)
+canvas.addEventListener("pointerdown", jump, { passive: false });
+
+// fallback for older Android browsers
+canvas.addEventListener("touchstart", jump, { passive: false });
+
+// 💻 KEYBOARD (PC + CHROMEBOOK)
 window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "ArrowUp") {
         e.preventDefault();
@@ -140,23 +139,7 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "KeyR") {
         resetWorld();
     }
-}, { capture: true });
-
-/*
-================= TOUCH + MOBILE =================
-We attach to BOTH window and document for full coverage
-*/
-window.addEventListener("pointerdown", jump, { passive: false, capture: true });
-document.addEventListener("pointerdown", jump, { passive: false, capture: true });
-
-window.addEventListener("touchstart", jump, { passive: false, capture: true });
-document.addEventListener("touchstart", jump, { passive: false, capture: true });
-
-/*
-================= FORCE FOCUS (CRITICAL FOR CHROMEBOOKS) =================
-*/
-window.focus();
-document.body.addEventListener("click", () => window.focus());
+});
 
 // ================= COLLISION =================
 function hit(a, b) {
@@ -182,17 +165,15 @@ function update() {
 
     if (player.alive) {
 
-        player.velY += GRAVITY;
-        player.y += player.velY;
+        player.vy += GRAVITY;
+        player.y += player.vy;
 
-        let ground = GROUND_Y();
+        let g = groundY();
 
-        if (player.y + player.h >= ground) {
-            player.y = ground - player.h;
-            player.velY = 0;
+        if (player.y + player.h >= g) {
+            player.y = g - player.h;
+            player.vy = 0;
             player.onGround = true;
-        } else {
-            player.onGround = false;
         }
 
         for (let s of spikes) {
@@ -233,7 +214,7 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = "#555";
-    ctx.fillRect(0, GROUND_Y(), canvas.width, canvas.height);
+    ctx.fillRect(0, groundY(), canvas.width, canvas.height);
 
     for (let s of spikes) drawSpike(s);
 
@@ -254,9 +235,8 @@ function loop() {
 }
 
 // ================= START =================
-resetWorld();
-resetPlayer();
 scheduleSpawn();
+resetPlayer();
 loop();
 
 </script>
