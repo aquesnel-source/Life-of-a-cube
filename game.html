@@ -2,60 +2,53 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Mobile Friendly)</title>
+<title>Runner Game (Mobile Friendly Rewrite)</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <style>
 body {
     margin: 0;
-    background: #111;
     overflow: hidden;
-    touch-action: none; /* ⭐ IMPORTANT for mobile */
+    background: #111;
+    touch-action: none;
+    overscroll-behavior: none;
 }
 
 canvas {
     display: block;
-    margin: auto;
-    background: #141414;
+}
+button {
+    position: fixed;
+    top: 10px;
+    z-index: 1000;
+    padding: 10px 14px;
+    background: #333;
+    color: white;
+    border: none;
 }
 </style>
 </head>
 
 <body>
 
-<button id="fsBtn" style="
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    z-index: 1000;
-    padding: 8px 12px;
-    background: #333;
-    color: white;
-    border: none;
-">
-Fullscreen
-</button>
+<button id="fsBtn" style="left:10px;">Fullscreen</button>
+<button id="pauseBtn" style="left:120px;">Pause</button>
 
-<button id="pauseBtn" style="
-    position: fixed;
-    top: 10px;
-    left: 110px;
-    z-index: 1000;
-    padding: 8px 12px;
-    background: #333;
-    color: white;
-    border: none;
-">
-Pause
-</button>
-
-<canvas id="game" width="800" height="400"></canvas>
+<canvas id="game"></canvas>
 
 <script>
 
+// ================= CANVAS =================
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
 
 // ================= FULLSCREEN =================
 document.getElementById("fsBtn").onclick = () => {
@@ -70,24 +63,28 @@ document.getElementById("pauseBtn").onclick = () => {
     document.getElementById("pauseBtn").innerText = paused ? "Resume" : "Pause";
 };
 
-// ================= PHYSICS (MOBILE TUNED) =================
-const GRAVITY = 0.30;   // slightly smoother fall
+// ================= GAME SETTINGS =================
+const GRAVITY = 0.30;
 const JUMP = -11;
 const SPEED = 2.7;
-const GROUND_Y = 340;
+
+function GROUND_Y() {
+    return canvas.height * 0.85;
+}
 
 // ================= GAME STATE =================
 let score = 0;
 let highScore = 0;
 
-let lastSpawnX = 300;
-let nextSpawnTime = 0;
-let passedClusters = new Set();
+let spikes = [];
+let passed = new Set();
+let lastX = 300;
+let nextSpawn = 0;
 
 // ================= PLAYER =================
 const player = {
     x: 100,
-    y: GROUND_Y - 30,
+    y: 0,
     w: 30,
     h: 30,
     velY: 0,
@@ -95,70 +92,67 @@ const player = {
     alive: true
 };
 
-// ================= SPIKES =================
-let spikes = [];
+// ================= RESET PLAYER =================
+function resetPlayer() {
+    player.y = GROUND_Y() - player.h;
+    player.velY = 0;
+    player.alive = true;
+}
 
 // ================= HELPERS =================
 function rand(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function scheduleNextSpawn() {
-    nextSpawnTime = Date.now() + rand(900, 1800);
+function scheduleSpawn() {
+    nextSpawn = Date.now() + rand(900, 1600);
 }
 
 function spawnCluster() {
-    lastSpawnX += rand(170, 260);
+    lastX += rand(170, 260);
 
-    let clusterId = Math.floor(Math.random() * 100000);
+    let id = Math.random().toString(36).substr(2, 5);
     let count = rand(2, 3);
 
     for (let i = 0; i < count; i++) {
         spikes.push({
-            x: lastSpawnX + i * 40,
-            y: GROUND_Y - 40,
+            x: lastX + i * 40,
+            y: GROUND_Y() - 40,
             size: 40,
-            id: clusterId
+            id: id
         });
     }
 
-    lastSpawnX += count * 40;
+    lastX += count * 40;
 }
 
-// ================= RESET =================
+// ================= RESET WORLD =================
 function resetWorld() {
     spikes = [];
-    passedClusters.clear();
-    lastSpawnX = 300;
+    passed.clear();
+    lastX = 300;
     score = 0;
-    scheduleNextSpawn();
+    scheduleSpawn();
+    resetPlayer();
 }
 
-// ================= INPUT =================
+// ================= INPUT (MOBILE FIXED) =================
+function jump(e) {
+    if (e) e.preventDefault();
 
-// ⭐ MOBILE TAP SUPPORT
-function jump() {
     if (player.onGround && player.alive && !paused) {
         player.velY = JUMP;
     }
 }
 
-// keyboard
-document.addEventListener("keydown", (e) => {
+// ⭐ UNIVERSAL INPUT (FIXED MOBILE ISSUE)
+document.addEventListener("pointerdown", jump, { passive: false });
+document.addEventListener("keydown", e => {
     if (e.code === "Space") jump();
 });
 
-// ⭐ mobile touch (FIXED)
-document.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    jump();
-}, { passive: false });
-
-// mouse fallback
-document.addEventListener("mousedown", jump);
-
 // ================= COLLISION =================
-function collide(a, b) {
+function hit(a, b) {
     return a.x < b.x + b.size &&
            a.x + a.w > b.x &&
            a.y < b.y + b.size &&
@@ -170,54 +164,57 @@ function update() {
 
     if (paused) return;
 
-    if (Date.now() >= nextSpawnTime) {
+    // spawn spikes
+    if (Date.now() >= nextSpawn) {
         spawnCluster();
-        scheduleNextSpawn();
+        scheduleSpawn();
     }
 
+    // move spikes
     for (let s of spikes) {
         s.x -= SPEED;
     }
 
     spikes = spikes.filter(s => s.x + s.size > 0);
 
+    // player physics
     if (player.alive) {
 
         player.velY += GRAVITY;
         player.y += player.velY;
 
-        if (player.y + player.h >= GROUND_Y) {
-            player.y = GROUND_Y - player.h;
+        let ground = GROUND_Y();
+
+        if (player.y + player.h >= ground) {
+            player.y = ground - player.h;
             player.velY = 0;
             player.onGround = true;
         } else {
             player.onGround = false;
         }
 
+        // collision
         for (let s of spikes) {
-            if (collide(player, s)) {
+            if (hit(player, s)) {
                 player.alive = false;
             }
         }
     }
 
+    // scoring
     for (let s of spikes) {
-        if (!passedClusters.has(s.id)) {
+        if (!passed.has(s.id)) {
             if (s.x + s.size < player.x) {
-                passedClusters.add(s.id);
+                passed.add(s.id);
                 score++;
             }
         }
     }
 
+    // reset on death
     if (!player.alive) {
         if (score > highScore) highScore = score;
         resetWorld();
-
-        player.x = 100;
-        player.y = GROUND_Y - 30;
-        player.velY = 0;
-        player.alive = true;
     }
 }
 
@@ -236,14 +233,18 @@ function draw() {
     ctx.fillStyle = "#141414";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // ground
     ctx.fillStyle = "#555";
-    ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height);
+    ctx.fillRect(0, GROUND_Y(), canvas.width, canvas.height);
 
+    // spikes
     for (let s of spikes) drawSpike(s);
 
+    // player
     ctx.fillStyle = player.alive ? "#66ccff" : "#ff6666";
     ctx.fillRect(player.x, player.y, player.w, player.h);
 
+    // UI
     ctx.fillStyle = "white";
     ctx.font = "20px Arial";
     ctx.fillText("Score: " + score, 10, 25);
@@ -251,7 +252,7 @@ function draw() {
 
     if (paused) {
         ctx.font = "40px Arial";
-        ctx.fillText("PAUSED", 320, 200);
+        ctx.fillText("PAUSED", canvas.width/2 - 90, canvas.height/2);
     }
 }
 
@@ -262,8 +263,9 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-// START
-scheduleNextSpawn();
+// ================= START =================
+scheduleSpawn();
+resetPlayer();
 loop();
 
 </script>
