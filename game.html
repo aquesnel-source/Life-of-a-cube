@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Chromebook Safe)</title>
+<title>Runner Game (Guaranteed Input Fix)</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
@@ -12,30 +12,26 @@ html, body {
     height: 100%;
     overflow: hidden;
     background: #111;
+
+    /* IMPORTANT FOR MOBILE */
     touch-action: none;
     overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 canvas {
     display: block;
-}
+    width: 100vw;
+    height: 100vh;
 
-button {
-    position: fixed;
-    top: 10px;
-    z-index: 1000;
-    padding: 10px 14px;
-    background: #333;
-    color: white;
-    border: none;
+    /* ensures touch events hit canvas cleanly */
+    touch-action: none;
 }
 </style>
 </head>
 
 <body>
-
-<button id="fsBtn" style="left:10px;">Fullscreen</button>
-<button id="pauseBtn" style="left:120px;">Pause</button>
 
 <canvas id="game"></canvas>
 
@@ -52,20 +48,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// ================= FULLSCREEN =================
-document.getElementById("fsBtn").onclick = () => {
-    if (!document.fullscreenElement) canvas.requestFullscreen();
-    else document.exitFullscreen();
-};
-
-// ================= PAUSE =================
-let paused = false;
-document.getElementById("pauseBtn").onclick = () => {
-    paused = !paused;
-    document.getElementById("pauseBtn").innerText = paused ? "Resume" : "Pause";
-};
-
-// ================= GAME SETTINGS =================
+// ================= GAME =================
 const GRAVITY = 0.30;
 const JUMP = -11;
 const SPEED = 2.7;
@@ -74,14 +57,13 @@ function GROUND_Y() {
     return canvas.height * 0.85;
 }
 
-// ================= STATE =================
-let score = 0;
-let highScore = 0;
-
 let spikes = [];
 let passed = new Set();
 let lastX = 300;
 let nextSpawn = 0;
+
+let score = 0;
+let highScore = 0;
 
 // ================= PLAYER =================
 const player = {
@@ -94,7 +76,6 @@ const player = {
     alive: true
 };
 
-// ================= INIT =================
 function resetPlayer() {
     player.y = GROUND_Y() - player.h;
     player.velY = 0;
@@ -128,7 +109,6 @@ function spawnCluster() {
     lastX += count * 40;
 }
 
-// ================= RESET =================
 function resetWorld() {
     spikes = [];
     passed.clear();
@@ -138,35 +118,19 @@ function resetWorld() {
     resetPlayer();
 }
 
-// ================= 🔒 FORCE FOCUS (CRITICAL FOR CHROMEBOOKS) =================
-window.focus();
-
-document.addEventListener("click", () => {
-    window.focus();
-});
-
-canvas.setAttribute("tabindex", "0");
-
-canvas.addEventListener("click", () => {
-    canvas.focus();
-});
-
-// ================= ⭐ UNIFIED INPUT SYSTEM =================
+// ================= 🔥 GUARANTEED INPUT SYSTEM =================
 function jump(e) {
     if (e) e.preventDefault();
 
-    if (player.onGround && player.alive && !paused) {
+    if (player.onGround && player.alive) {
         player.velY = JUMP;
     }
 }
 
-// 📱 Mobile + Chromebook touch
-document.addEventListener("pointerdown", jump);
-
-// 📱 fallback mobile support
-document.addEventListener("touchstart", jump);
-
-// 💻 keyboard (IMPORTANT: window = reliable on Chromebooks)
+/*
+================= KEYBOARD (PC + CHROMEBOOK) =================
+IMPORTANT: window-level is REQUIRED for reliability
+*/
 window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "ArrowUp") {
         e.preventDefault();
@@ -176,7 +140,23 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "KeyR") {
         resetWorld();
     }
-});
+}, { capture: true });
+
+/*
+================= TOUCH + MOBILE =================
+We attach to BOTH window and document for full coverage
+*/
+window.addEventListener("pointerdown", jump, { passive: false, capture: true });
+document.addEventListener("pointerdown", jump, { passive: false, capture: true });
+
+window.addEventListener("touchstart", jump, { passive: false, capture: true });
+document.addEventListener("touchstart", jump, { passive: false, capture: true });
+
+/*
+================= FORCE FOCUS (CRITICAL FOR CHROMEBOOKS) =================
+*/
+window.focus();
+document.body.addEventListener("click", () => window.focus());
 
 // ================= COLLISION =================
 function hit(a, b) {
@@ -188,8 +168,6 @@ function hit(a, b) {
 
 // ================= UPDATE =================
 function update() {
-
-    if (paused) return;
 
     if (Date.now() >= nextSpawn) {
         spawnCluster();
@@ -259,18 +237,13 @@ function draw() {
 
     for (let s of spikes) drawSpike(s);
 
-    ctx.fillStyle = player.alive ? "#66ccff" : "#ff6666";
+    ctx.fillStyle = "#66ccff";
     ctx.fillRect(player.x, player.y, player.w, player.h);
 
     ctx.fillStyle = "white";
     ctx.font = "20px Arial";
     ctx.fillText("Score: " + score, 10, 25);
     ctx.fillText("High: " + highScore, 10, 50);
-
-    if (paused) {
-        ctx.font = "40px Arial";
-        ctx.fillText("PAUSED", canvas.width/2 - 90, canvas.height/2);
-    }
 }
 
 // ================= LOOP =================
@@ -281,8 +254,9 @@ function loop() {
 }
 
 // ================= START =================
-scheduleSpawn();
+resetWorld();
 resetPlayer();
+scheduleSpawn();
 loop();
 
 </script>
