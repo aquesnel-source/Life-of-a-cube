@@ -2,13 +2,14 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Runner Game (Mobile Friendly Rewrite)</title>
+<title>Runner Game (Chromebook Safe)</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <style>
-body {
+html, body {
     margin: 0;
+    height: 100%;
     overflow: hidden;
     background: #111;
     touch-action: none;
@@ -18,6 +19,7 @@ body {
 canvas {
     display: block;
 }
+
 button {
     position: fixed;
     top: 10px;
@@ -72,7 +74,7 @@ function GROUND_Y() {
     return canvas.height * 0.85;
 }
 
-// ================= GAME STATE =================
+// ================= STATE =================
 let score = 0;
 let highScore = 0;
 
@@ -92,7 +94,7 @@ const player = {
     alive: true
 };
 
-// ================= RESET PLAYER =================
+// ================= INIT =================
 function resetPlayer() {
     player.y = GROUND_Y() - player.h;
     player.velY = 0;
@@ -111,8 +113,8 @@ function scheduleSpawn() {
 function spawnCluster() {
     lastX += rand(170, 260);
 
-    let id = Math.random().toString(36).substr(2, 5);
-    let count = rand(2, 3);
+    const id = Math.random().toString(36).slice(2);
+    const count = rand(2, 3);
 
     for (let i = 0; i < count; i++) {
         spikes.push({
@@ -126,7 +128,7 @@ function spawnCluster() {
     lastX += count * 40;
 }
 
-// ================= RESET WORLD =================
+// ================= RESET =================
 function resetWorld() {
     spikes = [];
     passed.clear();
@@ -136,7 +138,20 @@ function resetWorld() {
     resetPlayer();
 }
 
-// ================= INPUT (MOBILE FIXED) =================
+// ================= 🔒 FORCE FOCUS (CRITICAL FOR CHROMEBOOKS) =================
+window.focus();
+
+document.addEventListener("click", () => {
+    window.focus();
+});
+
+canvas.setAttribute("tabindex", "0");
+
+canvas.addEventListener("click", () => {
+    canvas.focus();
+});
+
+// ================= ⭐ UNIFIED INPUT SYSTEM =================
 function jump(e) {
     if (e) e.preventDefault();
 
@@ -145,10 +160,22 @@ function jump(e) {
     }
 }
 
-// ⭐ UNIVERSAL INPUT (FIXED MOBILE ISSUE)
-document.addEventListener("pointerdown", jump, { passive: false });
-document.addEventListener("keydown", e => {
-    if (e.code === "Space") jump();
+// 📱 Mobile + Chromebook touch
+document.addEventListener("pointerdown", jump);
+
+// 📱 fallback mobile support
+document.addEventListener("touchstart", jump);
+
+// 💻 keyboard (IMPORTANT: window = reliable on Chromebooks)
+window.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "ArrowUp") {
+        e.preventDefault();
+        jump();
+    }
+
+    if (e.code === "KeyR") {
+        resetWorld();
+    }
 });
 
 // ================= COLLISION =================
@@ -164,20 +191,17 @@ function update() {
 
     if (paused) return;
 
-    // spawn spikes
     if (Date.now() >= nextSpawn) {
         spawnCluster();
         scheduleSpawn();
     }
 
-    // move spikes
     for (let s of spikes) {
         s.x -= SPEED;
     }
 
     spikes = spikes.filter(s => s.x + s.size > 0);
 
-    // player physics
     if (player.alive) {
 
         player.velY += GRAVITY;
@@ -193,7 +217,6 @@ function update() {
             player.onGround = false;
         }
 
-        // collision
         for (let s of spikes) {
             if (hit(player, s)) {
                 player.alive = false;
@@ -201,7 +224,6 @@ function update() {
         }
     }
 
-    // scoring
     for (let s of spikes) {
         if (!passed.has(s.id)) {
             if (s.x + s.size < player.x) {
@@ -211,7 +233,6 @@ function update() {
         }
     }
 
-    // reset on death
     if (!player.alive) {
         if (score > highScore) highScore = score;
         resetWorld();
@@ -233,18 +254,14 @@ function draw() {
     ctx.fillStyle = "#141414";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // ground
     ctx.fillStyle = "#555";
     ctx.fillRect(0, GROUND_Y(), canvas.width, canvas.height);
 
-    // spikes
     for (let s of spikes) drawSpike(s);
 
-    // player
     ctx.fillStyle = player.alive ? "#66ccff" : "#ff6666";
     ctx.fillRect(player.x, player.y, player.w, player.h);
 
-    // UI
     ctx.fillStyle = "white";
     ctx.font = "20px Arial";
     ctx.fillText("Score: " + score, 10, 25);
